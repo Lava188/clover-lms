@@ -1,106 +1,148 @@
 # Clover IELTS LMS
 
-Monorepo nền tảng cho hai lập trình viên. React/Vite trong `frontend`, NestJS CommonJS trong `backend`. Chưa triển khai nghiệp vụ LMS.
+Monorepo cho hai lập trình viên: React/Vite trong `frontend`, NestJS CommonJS trong `backend`.
+Backend dùng SQL trực tiếp qua `pg` (node-postgres), không dùng ORM.
 
-## Yêu cầu và cài đặt
+## Cấu trúc dự án
 
-- Node.js 24 (xem `.nvmrc`), npm đi kèm, Git.
-- Tài khoản GitHub và Neon PostgreSQL. Không cần Docker hoặc PostgreSQL local.
+```text
+backend/
+  migrations/        # SQL có thứ tự, được review và chạy thủ công
+  src/
+    config/          # Kiểm tra biến môi trường
+    database/        # Connection pool và truy vấn SQL
+    modules/health/  # API health và kiểm tra kết nối database
+    app.module.ts    # Đăng ký các module
+    main.ts          # Khởi động NestJS
+frontend/
+  src/
+    app/             # Providers và router
+    components/ui/   # UI dùng chung (shadcn)
+    features/        # Thêm nghiệp vụ tại đây khi triển khai
+    lib/             # Axios và helpers
+    pages/           # Trang Home và Not Found
+    App.tsx
+    main.tsx
+    index.css
+```
+
+Tên folder nghiệp vụ dùng chữ thường, ví dụ `students`. File NestJS dùng tên
+`students.module.ts`, `students.controller.ts`, `students.service.ts`.
+React components dùng PascalCase, ví dụ `StudentForm.tsx`.
+Chỉ tạo thư mục hooks/types/layout/dto khi có code thực tế cần đặt vào đó.
+`dist` là kết quả build và `node_modules` là dependencies, không chỉnh sửa hoặc commit.
+
+## Cài đặt
+
+Cần Node.js 24, npm, Git và tài khoản Neon PostgreSQL. Không cần Docker hoặc PostgreSQL local.
 
 ```powershell
-git clone <URL-repository-cua-nhom>
+git clone https://github.com/Lava188/clover-lms.git
 cd clover-lms
 nvm install 24
 nvm use 24
 npm ci
 Copy-Item frontend/.env.example frontend/.env
 Copy-Item backend/.env.example backend/.env
-npm run db:generate
 npm run dev
 ```
 
-Chỉ copy `.env.example` khi chưa có `.env`; giữ nguyên file cấu hình cá nhân đã có.
+Chỉ copy `.env.example` khi chưa có `.env`, tránh ghi đè cấu hình cá nhân.
 
-Frontend: http://localhost:5173. API: http://localhost:3000/api/health.
-Trang chủ hiển thị trạng thái frontend, backend và database với loading, error và nút thử lại. Router có trang 404.
-API có thể chạy khi chưa cấu hình database; `/api/health/database` trả HTTP 503 trong trường hợp này.
+## Cấu hình Neon
 
-## Neon
+Trong Neon Console, chọn project → Connect → branch cá nhân (`dev-a` hoặc `dev-b`), database và role.
+Bật connection pooling, copy connection string vào `DATABASE_URL` trong `backend/.env`.
+Giữ nguyên SSL parameters Neon cung cấp. Không đưa credentials vào frontend, Git hoặc log.
 
-Tạo project Neon và các database branch `main`, `develop`, `dev-a`, `dev-b` trong Neon Console. Mỗi lập trình viên chọn branch riêng.
-Trong `backend/.env`, điền:
+```dotenv
+PORT=3000
+CORS_ORIGIN=http://localhost:5173
+DATABASE_URL=
+```
 
-- `DATABASE_URL`: connection string **pooled** của branch cá nhân.
-- `DIRECT_URL`: connection string **direct**, không có pooler, của **cùng branch**.
-
-Sao chép nguyên SSL parameters từ Neon. Không đặt các URL này vào frontend hoặc biến `VITE_*`. Không commit `.env` hoặc đưa credentials vào issue/log.
+`DIRECT_URL` không còn được backend sử dụng; có thể xóa dòng này khỏi `.env` cũ.
 `frontend/.env` chỉ cần `VITE_API_URL=http://localhost:3000/api`.
-Backend đọc `PORT` (mặc định 3000) và `CORS_ORIGIN` (mặc định http://localhost:5173).
-Lệnh workspace chạy trong thư mục từng ứng dụng nên `.env` được đọc tại đó.
+Ứng dụng vẫn khởi động khi chưa có DATABASE_URL; database health khi đó trả 503.
 
-## Lệnh thường dùng
+## Chạy và kiểm tra
 
 ```powershell
 npm run dev
 npm run dev:frontend
 npm run dev:backend
-npm run build:frontend
-npm run build:backend
+npm run build
 npm run lint
 npm run format:check
-npm run format
-npm run db:validate
-npm run db:generate
 ```
 
-`build:api` tự generate Prisma Client trước khi biên dịch. Client sinh vào `backend/src/generated/prisma` và không được commit.
-Prisma 7 dùng `prisma.config.ts` cho URL migration; generator `prisma-client` xuất CommonJS tương thích NestJS.
-Schema User/Role hiện tại chỉ là bootstrap, chưa phải ERD chính thức.
-
-## Migration an toàn
-
-Chưa có migration nào được chạy tự động. Trước khi tạo/chạy migration, kiểm tra cả hai URL đang trỏ tới đúng dedicated development branch và xác nhận trong Neon Console.
-
-Sau khi xác nhận branch cá nhân:
-
-```powershell
-npm run db:migrate -w backend -- --name init
-```
-
-Review SQL trong `backend/prisma/migrations`, commit schema và migration cùng nhau. Không commit generated client.
-Để áp dụng migration đã review lên một branch được phép:
-
-```powershell
-npm run db:deploy
-```
-
-Không chạy migration trên Neon `main` hoặc `develop` khi chưa có xác nhận rõ ràng của người phụ trách. Không dùng `prisma db push` trên database chung/production. Không đồng ý reset database có dữ liệu cần giữ. Deploy không tự tạo migration; cần tạo và review migration trên branch cá nhân trước.
-
-## Kiểm tra kết nối
-
-Khi API đang chạy:
+- Frontend: http://localhost:5173.
+- API: http://localhost:3000/api/health.
+- Database: http://localhost:3000/api/health/database.
 
 ```powershell
 Invoke-RestMethod http://localhost:3000/api/health
 Invoke-RestMethod http://localhost:3000/api/health/database
 ```
 
-Health trả `status: ok` và `message: IELTS LMS API is running`.
-Database health thực thi `SELECT 1`; chỉ trả `database: connected` khi kết nối thật thành công. HTTP 503 nghĩa là cấu hình thiếu hoặc database không truy cập được. Endpoint này không kiểm tra bảng User đã được migrate hay chưa.
+Database health chạy `SELECT 1`, chỉ trả `database: connected` khi kết nối thật thành công.
+HTTP 503 nghĩa là cấu hình thiếu hoặc database không truy cập được; endpoint không kiểm tra bảng nghiệp vụ.
+Không cần generate client trước khi build/chạy.
 
-## Làm việc nhóm
+## Viết SQL trong NestJS
+
+Import `DatabaseModule` vào module nghiệp vụ, inject `DatabaseService` trong service:
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { DatabaseService } from '../../database/database.service';
+
+@Injectable()
+export class UsersService {
+  constructor(private readonly database: DatabaseService) {}
+
+  async findByEmail(email: string) {
+    const result = await this.database.query<{
+      id: string;
+      email: string;
+      fullName: string;
+    }>('SELECT "id", "email", "fullName" FROM "User" WHERE "email" = $1', [
+      email,
+    ]);
+    return result.rows[0] ?? null;
+  }
+}
+```
+
+Luôn truyền giá trị người dùng qua `$1`, `$2` và mảng tham số, không nối chuỗi SQL.
+Generic TypeScript chỉ mô tả kiểu dữ liệu, không tự kiểm tra dữ liệu runtime.
+Pool được tái sử dụng và đóng khi ứng dụng shutdown. Truy vấn hiện có timeout 10 giây.
+Không dùng nhiều lệnh `database.query()` để thực hiện transaction: transaction phải dùng cùng một client đã checkout và luôn release trong `finally`.
+
+## SQL schema và làm việc nhóm
+
+`backend/migrations/001_bootstrap_users.sql` là schema User/Role tạm thời tương đương nền tảng ban đầu.
+File này chưa được chạy tự động và chỉ dành cho database phát triển mới, chưa có bảng tương ứng.
+Nếu đã có bảng tạo trước đây, kiểm tra schema hiện hữu trước; không xóa/reset dữ liệu để chạy lại file.
+
+Để áp dụng thủ công: xác nhận branch phát triển riêng trong Neon Console, mở SQL Editor,
+review nội dung SQL rồi mới thực thi trên đúng branch. Không chạy trên `main`/`develop` khi chưa được người phụ trách xác nhận.
+Không có migration runner hoặc lệnh deploy database tự động trong cấu hình này.
+
+Khi thay đổi schema, thêm file SQL đánh số tiếp theo vào `backend/migrations/`, mở PR để review,
+và ghi lại file đã áp dụng cho từng Neon branch. Không sửa file đã được áp dụng chung.
+Nếu cần nhiều migration, thống nhất migration runner có bảng theo dõi phiên bản trước khi phát hành.
 
 - Git `main`: ổn định; `develop`: tích hợp; `feature/*`: phát triển tính năng.
-- Tạo feature branch từ develop, mở pull request vào develop và nhờ người còn lại review. Đưa develop vào main qua PR khi ổn định.
-- Trên GitHub, mời cộng tác viên, bảo vệ main/develop, yêu cầu review trước merge; cấu hình CI build/lint khi nhóm sẵn sàng.
-- Neon `main`: production-ready; `develop`: tích hợp; `dev-a` và `dev-b`: database riêng cho mỗi người.
-- **Git branch và Neon branch không tự đồng bộ migration.** Checkout Git không đổi DATABASE_URL; mỗi người phải chọn đúng Neon branch và áp dụng migration được review.
-- Sau pull thay đổi dependency: `npm ci`. Sau pull thay đổi schema: `npm run db:generate`, rồi áp dụng migration đã review lên database cá nhân.
+- Neon `main`: production-ready; `develop`: tích hợp; `dev-a`, `dev-b`: database riêng.
+- Git branch và Neon branch không tự đồng bộ schema. Checkout Git không đổi DATABASE_URL.
+- Sau pull dependency: `npm ci`. Sau pull SQL: review và áp dụng thủ công trên branch phù hợp.
+- Mời cộng tác viên trên GitHub, bảo vệ main/develop và yêu cầu PR review.
 
-Giữ một `package-lock.json` ở root và cài dependency từ root với `-w frontend` hoặc `-w backend`. Các thư mục features/modules là chỗ đặt nghiệp vụ trong giai đoạn tiếp theo.
+Giữ một lockfile tại root; cài dependency bằng `npm install <package> -w backend` hoặc `-w frontend`.
+Các thư mục features/modules hiện dành cho nghiệp vụ LMS giai đoạn tiếp theo.
 
-## Tài liệu cấu hình
+## Tài liệu
 
-- [Prisma 7 và driver adapters](https://www.prisma.io/docs/guides/upgrade-prisma-orm/v7)
-- [shadcn/ui cho Vite](https://ui.shadcn.com/docs/installation/vite)
-- [NestJS configuration](https://docs.nestjs.com/application/configuration)
+- [node-postgres queries](https://node-postgres.com/features/queries)
+- [node-postgres pooling](https://node-postgres.com/features/pooling)

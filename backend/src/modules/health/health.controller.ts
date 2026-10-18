@@ -1,15 +1,15 @@
 import { Controller, Get } from '@nestjs/common';
-import { PrismaService } from './prisma/prisma.service';
+import { DatabaseService } from '../../database/database.service';
 @Controller('health')
-export class AppController {
-  constructor(private readonly prisma: PrismaService) {}
+export class HealthController {
+  constructor(private readonly databaseService: DatabaseService) {}
   @Get()
   health() {
     return { status: 'ok', message: 'IELTS LMS API is running' };
   }
   @Get('database')
   async database() {
-    await this.prisma.checkConnection();
+    await this.databaseService.checkConnection();
     return { status: 'ok', database: 'connected' };
   }
 }

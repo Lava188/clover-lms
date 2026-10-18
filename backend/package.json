@@ -1,26 +1,19 @@
 {
-  "name": "api",
+  "name": "backend",
   "version": "0.0.0",
   "private": true,
   "type": "commonjs",
   "scripts": {
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
-    "prebuild": "prisma generate",
     "build": "nest build",
-    "lint": "eslint .",
-    "db:generate": "prisma generate",
-    "db:validate": "prisma validate",
-    "db:deploy": "prisma migrate deploy",
-    "db:migrate": "prisma migrate dev"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@nestjs/common": "^11.2.7",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.2.7",
     "@nestjs/platform-express": "^11.2.7",
-    "@prisma/adapter-pg": "^7.10.1",
-    "@prisma/client": "^7.10.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "dotenv": "^18.0.8",
@@ -36,7 +29,6 @@
     "@types/pg": "^8.23.1",
     "eslint": "^10.13.0",
     "globals": "^17.13.0",
-    "prisma": "^7.10.1",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.71.2"
   }
