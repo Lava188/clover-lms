@@ -4,6 +4,9 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
+    "admin:bootstrap": "npm run build && node --env-file-if-exists=.env dist/bootstrap-admin.js",
+    "test": "npm run build && node --test test/*.test.cjs",
+    "db:migrate": "node --env-file-if-exists=.env scripts/migrate.mjs",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "build": "nest build",

@@ -121,13 +121,32 @@ Không dùng nhiều lệnh `database.query()` để thực hiện transaction: 
 
 ## SQL schema và làm việc nhóm
 
-`backend/migrations/001_bootstrap_users.sql` là schema User/Role tạm thời tương đương nền tảng ban đầu.
-File này chưa được chạy tự động và chỉ dành cho database phát triển mới, chưa có bảng tương ứng.
-Nếu đã có bảng tạo trước đây, kiểm tra schema hiện hữu trước; không xóa/reset dữ liệu để chạy lại file.
+`backend/migrations/001_create_users.sql` định nghĩa bảng User và enum Role.
+Thứ tự cột: id, fullName, phone, email, password, role, status, createdAt, updatedAt.
+Cột password chỉ lưu mật khẩu đã hash. Migration 001 ban đầu dùng phone INTEGER.
+`002_split_users_into_admin_and_student.sql` chuyển tài khoản ADMIN/TEACHER sang
+bảng Admin, STUDENT sang bảng Student, giữ ID và dữ liệu rồi xóa bảng User.
+Migration 003 hợp nhất tài khoản về User chung cho ADMIN/TEACHER/STUDENT,
+chuyển phone sang TEXT và đặt email unique không phân biệt hoa thường.
+Migration 004 tạo StudentProfile/StaffProfile, tạo profile cho tài khoản hiện có,
+đối chiếu dữ liệu rồi xóa hai bảng tài khoản Admin/Student bằng RESTRICT.
+Nếu dữ liệu nguồn khác User hoặc còn khóa ngoại phụ thuộc, migration sẽ rollback.
+Không sửa các migration đã áp dụng. Code mới chỉ truy vấn tài khoản qua User.
+Phân quyền ADMIN/TEACHER và phạm vi tài nguyên phải được thực thi ở backend.
+
+Profile dùng userId làm khóa chính và khóa ngoại tới User (quan hệ 1–0..1).
+StudentProfile có studentCode tùy chọn; StaffProfile có staffCode tùy chọn và
+staffType (ADMIN/TEACHER/ASSISTANT), cùng createdAt/updatedAt tự cập nhật.
+staffType là loại nhân sự, không cấp thêm quyền; quyền vẫn dựa trên User.role.
+Backend phải tạo/đổi profile nhất quán với role trong cùng transaction khi quản lý
+tài khoản. Profile không chứa email, mật khẩu hay thông tin tài khoản bị lặp lại.
 
 Để áp dụng thủ công: xác nhận branch phát triển riêng trong Neon Console, mở SQL Editor,
 review nội dung SQL rồi mới thực thi trên đúng branch. Không chạy trên `main`/`develop` khi chưa được người phụ trách xác nhận.
-Không có migration runner hoặc lệnh deploy database tự động trong cấu hình này.
+Có thể chạy `npm run db:migrate` từ root để áp dụng các file SQL theo thứ tự,
+với lịch sử trong `public.schema_migrations`. Lệnh đọc `backend/.env`; kiểm tra
+đúng branch trước khi chạy. Nếu đã chạy SQL thủ công, cần đối chiếu schema và lịch
+sử trước khi dùng runner. Runner chạy tất cả migration còn thiếu trong một transaction.
 
 Khi thay đổi schema, thêm file SQL đánh số tiếp theo vào `backend/migrations/`, mở PR để review,
 và ghi lại file đã áp dụng cho từng Neon branch. Không sửa file đã được áp dụng chung.

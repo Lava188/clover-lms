@@ -10,6 +10,9 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "admin:bootstrap": "npm run admin:bootstrap -w backend",
+    "test": "npm run test -w backend",
+    "db:migrate": "npm run db:migrate -w backend",
     "dev:frontend": "npm run dev -w frontend",
     "dev:backend": "npm run start:dev -w backend",
     "build:frontend": "npm run build -w frontend",
