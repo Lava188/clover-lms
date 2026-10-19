@@ -10,8 +10,9 @@
     "node": ">=24 <25"
   },
   "scripts": {
-    "admin:bootstrap": "npm run admin:bootstrap -w backend",
-    "test": "npm run test -w backend",
+    "db:bootstrap-admin": "npm run db:bootstrap-admin -w backend",
+    "admin:bootstrap": "npm run db:bootstrap-admin",
+    "test": "npm run test --workspaces",
     "db:migrate": "npm run db:migrate -w backend",
     "dev:frontend": "npm run dev -w frontend",
     "dev:backend": "npm run start:dev -w backend",
@@ -22,6 +23,11 @@
     "lint": "npm run lint --workspaces",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
+  },
+  "overrides": {
+    "@nestjs/swagger": {
+      "js-yaml": "5.5.0"
+    }
   },
   "devDependencies": {
     "concurrently": "^10.0.6",

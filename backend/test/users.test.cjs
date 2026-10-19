@@ -8,16 +8,25 @@ const { DatabaseService } = require('../dist/database/database.service');
 test('password hashing uses unique salts and verifies only the correct password', async () => {
   const service = new PasswordService();
   const password = 'a sufficiently long password';
-  const first = await service.hash(password);
-  const second = await service.hash(password);
+  const first = await service.hashPassword(password);
+  const second = await service.hashPassword(password);
+  assert.match(first, /^\$argon2id\$/);
   assert.notEqual(first, second);
   assert(!first.includes(password));
-  assert.equal(await service.verify(password, first), true);
-  assert.equal(await service.verify('incorrect password', first), false);
-  assert.equal(await service.verify(password, 'plaintext'), false);
-  assert.equal(await service.verify(password, first.slice(0, -1)), false);
-  await assert.rejects(service.hash('short'));
-  await assert.rejects(service.hash('x'.repeat(1025)));
+  assert.equal(await service.verifyPassword(password, first), true);
+  assert.equal(
+    await service.verifyPassword('incorrect password', first),
+    false,
+  );
+  assert.equal(await service.verifyPassword(password, 'plaintext'), false);
+  assert.equal(
+    await service.verifyPassword(password, '$argon2id$malformed'),
+    false,
+  );
+  assert.equal(await service.verifyPassword(password, 'scrypt$legacy'), false);
+  assert.equal(await service.verifyPassword('x'.repeat(1025), first), false);
+  await assert.rejects(service.hashPassword('short'));
+  await assert.rejects(service.hashPassword('x'.repeat(1025)));
 });
 
 test('email lookup normalizes input and uses SQL parameters', async () => {
@@ -43,46 +52,39 @@ test('public user lookup does not select password', async () => {
   assert.equal(await repository.findById('missing'), null);
 });
 
-test('bootstrap refuses an existing admin before inserting', async () => {
-  let calls = 0;
+test('bootstrap lock pins isolation and locks before running work', async () => {
+  const calls = [];
   const repository = new UsersRepository({
     transaction: async (work) =>
       work({
-        query: async () => {
-          calls++;
-          return { rowCount: calls === 2 ? 1 : 0 };
-        },
+        query: async (sql) => calls.push(sql),
       }),
   });
-  await assert.rejects(repository.bootstrapAdmin({}), /already exists/);
-  assert.equal(calls, 2);
+  const result = await repository.withBootstrapLock(async () => {
+    calls.push('work');
+    return 'ok';
+  });
+  assert.equal(result, 'ok');
+  assert.deepEqual(calls, [
+    'SET TRANSACTION ISOLATION LEVEL READ COMMITTED',
+    'SELECT pg_advisory_xact_lock(742019, 2)',
+    'LOCK TABLE public."User" IN SHARE ROW EXCLUSIVE MODE',
+    'work',
+  ]);
 });
 
-test('bootstrap stores supplied hash with forced ADMIN role and returns no password', async () => {
-  const input = {
-    fullName: 'Admin',
-    phone: '0123456789',
-    email: 'admin@example.com',
-    password: 'hash',
-  };
-  let calls = 0;
-  const repository = new UsersRepository({
-    transaction: async (work) =>
-      work({
-        query: async (sql, values) => {
-          calls++;
-          if (calls === 1) assert(sql.includes('pg_advisory_xact_lock'));
-          if (calls === 3) {
-            assert(sql.includes("'ADMIN'"));
-            assert(!sql.split('RETURNING')[1].includes('password'));
-            assert.deepEqual(values, Object.values(input));
-            return { rows: [{ id: 'new-admin', role: 'ADMIN' }] };
-          }
-          return { rowCount: 0 };
-        },
-      }),
-  });
-  assert.equal((await repository.bootstrapAdmin(input)).role, 'ADMIN');
+test('hasAdmin includes disabled administrators and binds the ADMIN role', async () => {
+  const repository = new UsersRepository({});
+  assert.equal(
+    await repository.hasAdmin({
+      query: async (sql, values) => {
+        assert(!sql.includes('status'));
+        assert.deepEqual(values, ['ADMIN']);
+        return { rowCount: 1 };
+      },
+    }),
+    true,
+  );
 });
 
 for (const fails of [false, true]) {
